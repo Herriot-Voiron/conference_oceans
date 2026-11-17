@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Console de la Conférence de l'océan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : une console de séance projetée — barre de séance en haut, quatre onglets, un grand afficheur par onglet */
+:root {
+  --bg: #F2F6F7;          /* écume */
+  --surface: #FFFFFF;
+  --sunk: #E4ECEF;
+  --ink: #0F2633;         /* encre des grands fonds */
+  --muted: #536A76;
+  --line: #C9D7DD;
+  --sea: #1F5F7A;         /* accent : bleu océan */
+  --sea-soft: #DCEBF1;
+  --signal: #C4671A;      /* orange de la charte */
+  --signal-soft: #FBEADB;
+  --ok: #2E7D4F; --ok-soft: #DDF0E4;
+  --bad: #B3362C; --bad-soft: #F7DEDB;
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0B1A23; --surface: #112532; --sunk: #0E202B; --ink: #E6F0F3; --muted: #93AAB5; --line: #24404F;
+  --sea: #5FB3D3; --sea-soft: #15384A; --signal: #F0954A; --signal-soft: #3A2616;
+  --ok: #5CC488; --ok-soft: #133524; --bad: #EF7A6E; --bad-soft: #3B1A17; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0B1A23; --surface: #112532; --sunk: #0E202B; --ink: #E6F0F3; --muted: #93AAB5; --line: #24404F;
+  --sea: #5FB3D3; --sea-soft: #15384A; --signal: #F0954A; --signal-soft: #3A2616;
+  --ok: #5CC488; --ok-soft: #133524; --bad: #EF7A6E; --bad-soft: #3B1A17; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.45; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 16px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+.eyebrow { font-family: var(--f-display); font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+/* barre de séance */
+.bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; padding-bottom: 14px; border-bottom: 2px solid var(--ink); }
+.brand h1 { font-size: clamp(22px, 3vw, 32px); font-weight: 800; letter-spacing: -.01em; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.bar-right { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mini-clock { font-family: var(--f-mono); font-weight: 700; font-size: 22px; padding: 6px 12px; border-radius: 8px; background: var(--sunk); font-variant-numeric: tabular-nums; }
+.mini-clock[data-state="warn"] { background: var(--signal-soft); color: var(--signal); }
+.mini-clock[data-state="over"] { background: var(--bad-soft); color: var(--bad); }
+.ghost { border: 1px solid var(--line); background: var(--surface); padding: 8px 12px; border-radius: 8px; font-size: 14px; }
+.ghost[aria-pressed="true"] { background: var(--sea-soft); border-color: var(--sea); }
+
+nav.tabs { display: flex; gap: 4px; margin: 16px 0 20px; overflow-x: auto; }
+nav.tabs a { font-family: var(--f-display); font-weight: 700; font-size: 15px; text-decoration: none; color: var(--muted);
+  padding: 10px 16px; border-radius: 8px 8px 0 0; border-bottom: 3px solid transparent; white-space: nowrap; }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--signal); background: var(--surface); }
+nav.tabs .k { font-family: var(--f-mono); font-size: 11px; opacity: .6; margin-left: 6px; }
+
+.panel { display: grid; gap: 20px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 600; background: var(--sea); color: var(--bg); font-size: 15px; }
+.btn.alt { background: var(--sunk); color: var(--ink); }
+.btn.warn { background: var(--signal); color: #fff; }
+.btn:disabled { opacity: .4; cursor: default; }
+
+/* afficheur principal */
+.display { display: grid; gap: 6px; justify-items: center; text-align: center; padding: 28px 16px; border-radius: var(--r); background: var(--sunk); }
+.clock { font-family: var(--f-mono); font-weight: 700; font-size: clamp(72px, 16vw, 190px); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+.display[data-state="warn"] .clock { color: var(--signal); }
+.display[data-state="over"] .clock { color: var(--bad); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .display[data-state="over"] .clock { animation: none; } }
+.display .what { font-family: var(--f-display); font-weight: 800; font-size: clamp(22px, 3.4vw, 40px); }
+.display .sub { color: var(--muted); max-width: 60ch; }
+.progress { width: min(640px, 100%); height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--sea); width: 0; transition: width .3s linear; }
+.display[data-state="warn"] .progress i { background: var(--signal); }
+.display[data-state="over"] .progress i { background: var(--bad); }
+
+/* étapes de la séance */
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.step { border: 1px solid var(--line); border-radius: var(--r); padding: 12px; background: var(--surface); display: grid; gap: 6px; text-align: left; }
+.step[data-on="true"] { border-color: var(--signal); box-shadow: inset 0 0 0 1px var(--signal); }
+.step[data-done="true"] { opacity: .6; }
+.step .n { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.step b { font-family: var(--f-display); font-size: 16px; }
+.dur { display: flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.dur button { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line); background: var(--sunk); padding: 0; }
+
+/* délégations : chevalets */
+.plates { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.plate { border-radius: 8px; border: 1px solid var(--line); background: var(--surface); padding: 10px 12px 10px 16px; position: relative; display: flex; gap: 10px; align-items: center; justify-content: space-between; text-align: left; width: 100%; }
+.plate::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; border-radius: 8px 0 0 8px; background: var(--c); }
+.plate .nm { font-family: var(--f-display); font-weight: 700; font-size: 15px; }
+.plate .st { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.plate[data-st="now"] { border-color: var(--c); box-shadow: inset 0 0 0 2px var(--c); }
+.plate[data-st="done"] { opacity: .5; }
+.plate .ord { font-family: var(--f-mono); font-size: 13px; color: var(--muted); width: 22px; }
+.speaker { font-family: var(--f-display); font-weight: 800; font-size: clamp(28px, 5vw, 56px); color: var(--c, var(--ink)); }
+
+/* événements */
+.deck { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.deck button { border: 1px dashed var(--line); background: var(--surface); border-radius: 8px; padding: 10px; text-align: left; font-size: 13px; }
+.deck button[data-used="true"] { opacity: .45; text-decoration: line-through; }
+.event { border-radius: var(--r); background: var(--surface); border: 2px solid var(--signal); padding: 24px; display: grid; gap: 12px; }
+.event h2 { font-size: clamp(26px, 4vw, 44px); font-weight: 800; }
+.event p { margin: 0; font-size: clamp(16px, 1.7vw, 21px); max-width: 70ch; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px; background: var(--sunk); color: var(--muted); }
+.tag.real { background: var(--sea-soft); color: var(--sea); }
+.tag.fic { background: var(--signal-soft); color: var(--signal); }
+.consigne { border-left: 4px solid var(--signal); background: var(--signal-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 99px; color: #fff; background: var(--c); }
+
+/* votes */
+.articles { display: grid; gap: 16px; }
+.art-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 10px; }
+.art-head h3 { font-size: 20px; }
+.verdict { font-family: var(--f-display); font-weight: 800; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; padding: 6px 12px; border-radius: 6px; background: var(--sunk); color: var(--muted); }
+.verdict[data-v="ok"] { background: var(--ok-soft); color: var(--ok); }
+.verdict[data-v="no"] { background: var(--bad-soft); color: var(--bad); }
+textarea { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: inherit; background: var(--sunk); color: var(--ink); resize: vertical; }
+.vote-grid { overflow-x: auto; margin-top: 12px; }
+.vote-grid table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.vote-grid td, .vote-grid th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.vote-grid th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.vb { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.vb button { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 10px; font-size: 13px; }
+.vb button[aria-pressed="true"][data-v="pour"] { background: var(--ok); color: var(--bg); border-color: var(--ok); }
+.vb button[aria-pressed="true"][data-v="contre"] { background: var(--bad); color: var(--bg); border-color: var(--bad); }
+.vb button[aria-pressed="true"][data-v="abst"] { background: var(--muted); color: var(--bg); border-color: var(--muted); }
+.tally { display: flex; flex-wrap: wrap; gap: 16px; font-family: var(--f-mono); font-variant-numeric: tabular-nums; margin-top: 10px; font-size: 15px; }
+.tally b { font-size: 22px; }
+.decl { border: 2px solid var(--ink); border-radius: var(--r); padding: 24px; background: var(--surface); }
+.decl h2 { font-size: clamp(24px, 3.2vw, 36px); margin-bottom: 4px; }
+.decl ol { margin: 16px 0 0; padding-left: 1.4em; display: grid; gap: 10px; font-size: 18px; }
+.decl li[data-v="no"] { color: var(--muted); text-decoration: line-through; }
+.decl li[data-v="wait"] { color: var(--muted); font-style: italic; }
+.small { font-size: 13px; color: var(--muted); }
+.two { display: grid; grid-template-columns: 1fr; gap: 20px; }
+@media (min-width: 980px) { .two { grid-template-columns: 1.15fr .85fr; } }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; }
+
+/* ---------- écran élèves (projection) ---------- */
+#proj { height: 100vh; overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; gap: 3vh; padding-block: 4vh;
+  padding-left: max(4vw, env(safe-area-inset-left, 0px)); padding-right: max(4vw, env(safe-area-inset-right, 0px)); }
+.pj-top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; border-bottom: 3px solid var(--ink); padding-bottom: 1.5vh; }
+.pj-top h1 { font-size: clamp(22px, 3.2vw, 48px); font-weight: 800; }
+.pj-top .eyebrow { font-size: clamp(12px, 1.2vw, 18px); }
+.pj-main { min-height: 0; display: grid; gap: 1.6vh; align-content: center; justify-items: center; text-align: center; }
+.pj-phase { font-family: var(--f-display); font-weight: 800; font-size: min(6vw, 10vh); line-height: 1.05; }
+.pj-clock { font-family: var(--f-mono); font-weight: 700; font-size: min(22vw, 36vh); line-height: .95; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.pj-main[data-state="warn"] .pj-clock { color: var(--signal); }
+.pj-main[data-state="over"] .pj-clock { color: var(--bad); }
+.pj-main[data-state="paused"] .pj-clock { opacity: .55; }
+#proj[data-busy="true"] .pj-clock { font-size: min(15vw, 22vh); }
+#proj[data-busy="true"] .pj-phase { font-size: min(4.5vw, 7vh); }
+#proj[data-busy="true"] .pj-note { display: none; }
+.pj-note { font-size: clamp(16px, 1.8vw, 28px); color: var(--muted); max-width: 46ch; }
+.pj-bar { width: min(1100px, 100%); height: 14px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.pj-bar i { display: block; height: 100%; width: 0; background: var(--sea); transition: width .3s linear; }
+.pj-main[data-state="warn"] .pj-bar i { background: var(--signal); }
+.pj-main[data-state="over"] .pj-bar i { background: var(--bad); }
+.pj-side { display: grid; gap: 1.5vh; width: min(1100px, 100%); }
+.pj-spk { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 12px 28px; padding: 1.6vh 2vw; border-radius: 12px; background: var(--surface); border: 3px solid var(--c, var(--line)); }
+.pj-spk .who { font-family: var(--f-display); font-weight: 800; font-size: clamp(24px, 3.6vw, 56px); color: var(--c, var(--ink)); }
+.pj-spk .t { font-family: var(--f-mono); font-weight: 700; font-size: clamp(28px, 4vw, 64px); font-variant-numeric: tabular-nums; }
+.pj-spk .lab { font-size: clamp(13px, 1.3vw, 20px); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
+.pj-ev { text-align: left; padding: 1.6vh 2vw; border-radius: 12px; background: var(--signal-soft); border-left: 8px solid var(--signal); }
+.pj-ev b { display: block; font-family: var(--f-display); font-size: clamp(22px, 3vw, 46px); }
+.pj-ev span { font-size: clamp(16px, 1.8vw, 28px); }
+.pj-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1vw; }
+.pj-step { border-top: 6px solid var(--line); padding-top: 1vh; font-size: clamp(12px, 1.4vw, 22px); color: var(--muted); }
+.pj-step b { display: block; font-family: var(--f-display); color: var(--ink); font-size: clamp(14px, 1.7vw, 26px); }
+.pj-step[data-s="done"] { border-color: var(--sea); opacity: .55; }
+.pj-step[data-s="now"] { border-color: var(--signal); }
+.pj-step[data-s="now"] b { color: var(--signal); }
+.pj-fs { position: fixed; right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); opacity: .35; }
+.pj-fs:hover, .pj-fs:focus-visible { opacity: 1; }
+@media (max-width: 600px) { .pj-steps { grid-template-columns: 1fr 1fr; } }
+.confirmbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 14px; margin-top: 12px; border-radius: var(--r); border: 2px solid var(--bad); background: var(--bad-soft); }
+.btn.danger { background: var(--bad); color: var(--bg); }
+.projbox { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--sea); background: var(--sea-soft); border-radius: var(--r); margin-top: 12px; }
+.projbox code { font-family: var(--f-mono); font-size: 13px; word-break: break-all; user-select: all; }
+</style>
+<style>[hidden]{display:none!important} body{margin:0} img{max-width:100%}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">
+      <div class="eyebrow">G1 · Coopérer · console du président de séance</div>
+      <h1>Conférence de l'océan</h1>
+      <p id="phaseLine">Temps 1 — Préparer</p>
+    </div>
+    <div class="bar-right">
+      <span class="mini-clock" id="miniClock" title="Minuteur du temps en cours">20:00</span>
+      <button class="ghost" id="soundBtn" aria-pressed="false">Son coupé</button>
+      <button class="ghost" id="fsBtn">Plein écran</button>
+      <button class="ghost" id="resetAllBtn">Tout réinitialiser</button>
+      <button class="btn warn" id="projBtn">Écran élèves</button>
+    </div>
+  </header>
+
+  <div class="confirmbar" id="confirmBar" hidden role="alertdialog" aria-labelledby="confirmTxt">
+    <span id="confirmTxt"><b>Tout réinitialiser ?</b> Minuteurs et durées, ordre de parole, événements tirés, votes et textes des articles reviennent à zéro. L'écran élèves suit.</span>
+    <div class="row"><button class="btn danger" id="confirmYes">Oui, tout réinitialiser</button><button class="btn alt" id="confirmNo">Annuler</button></div>
+  </div>
+  <div class="projbox" id="projBox" hidden>
+    <b>Écran élèves</b>
+    <span class="small" id="projMsg">Ouvrez ce lien dans un nouvel onglet ou une nouvelle fenêtre, glissez-la sur l'écran du vidéoprojecteur, puis passez-la en plein écran. Elle suit cette console en direct, à condition d'être dans le même navigateur.</span>
+    <div class="row"><a class="btn" id="projLink" href="#projection" target="_blank" rel="noopener">Ouvrir l'écran élèves</a>
+    <button class="btn alt" id="projCopy">Copier le lien</button></div>
+    <code id="projUrl"></code>
+  </div>
+  <nav class="tabs" aria-label="Onglets de la console">
+    <a href="#seance" data-tab="seance">Séance<span class="k">1</span></a>
+    <a href="#parole" data-tab="parole">Tours de parole<span class="k">2</span></a>
+    <a href="#evenements" data-tab="evenements">Événements<span class="k">3</span></a>
+    <a href="#votes" data-tab="votes">Votes et déclaration<span class="k">4</span></a>
+  </nav>
+
+  <!-- SÉANCE -->
+  <section class="panel" id="tab-seance">
+    <div class="display" id="mainDisplay">
+      <div class="eyebrow" id="mainStep">Temps 1 sur 5</div>
+      <div class="what" id="mainWhat">Préparer</div>
+      <div class="clock" id="mainClock">20:00</div>
+      <div class="progress"><i id="mainBar"></i></div>
+      <div class="sub" id="mainSub"></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="startBtn">Démarrer</button>
+      <button class="btn alt" id="plusBtn">+1 min</button>
+      <button class="btn alt" id="resetBtn">Recommencer ce temps</button>
+      <button class="btn alt" id="prevBtn">Temps précédent</button>
+      <button class="btn warn" id="nextBtn">Temps suivant</button>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">Déroulé · réglez les durées avant de commencer</div>
+      <div class="steps" id="steps"></div>
+    </div>
+    <p class="small">Raccourcis : espace pour démarrer ou mettre en pause le minuteur de l'onglet ouvert, 1 à 4 pour changer d'onglet. Tout est enregistré dans ce navigateur : vous pouvez fermer la page et reprendre.</p>
+  </section>
+
+  <!-- PAROLE -->
+  <section class="panel" id="tab-parole" hidden>
+    <div class="two">
+      <div class="display" id="spkDisplay">
+        <div class="eyebrow" id="spkEyebrow">Porte-parole</div>
+        <div class="speaker" id="spkName">Tirez l'ordre au sort</div>
+        <div class="clock" id="spkClock">1:30</div>
+        <div class="progress"><i id="spkBar"></i></div>
+        <div class="sub" id="spkSub">Chaque délégation présente sa position sans lire ses notes.</div>
+      </div>
+      <div class="card" style="display:grid;gap:12px;align-content:start">
+        <div class="row">
+          <button class="btn" id="shuffleBtn">Tirer l'ordre au sort</button>
+          <button class="btn alt" id="spkStartBtn">Démarrer</button>
+          <button class="btn warn" id="spkNextBtn">Suivant</button>
+        </div>
+        <div class="row">
+          <label for="spkLen" class="small">Temps de parole</label>
+          <select id="spkLen" class="ghost">
+            <option value="60">1 min</option><option value="90" selected>1 min 30</option><option value="120">2 min</option>
+          </select>
+          <button class="btn alt" id="replyBtn" title="Cliquez d'abord sur une délégation dans la liste">Droit de réponse 30 s</button>
+        </div>
+        <p class="small" id="replyHint">Pour un droit de réponse, sélectionnez une délégation dans la liste, puis cliquez sur « Droit de réponse ».</p>
+      </div>
+    </div>
+    <div class="plates" id="spkList"></div>
+  </section>
+
+  <!-- ÉVÉNEMENTS -->
+  <section class="panel" id="tab-evenements" hidden>
+    <div class="row">
+      <button class="btn warn" id="drawBtn">Tirer un événement au hasard</button>
+      <span class="small" id="deckCount"></span>
+    </div>
+    <div class="row"><button class="ghost" id="projEvBtn" aria-pressed="false">Afficher l'événement sur l'écran élèves</button></div>
+    <div id="eventView"></div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">Le paquet · cliquez sur une carte pour la déclencher vous-même</div>
+      <div class="deck" id="deck"></div>
+    </div>
+  </section>
+
+  <!-- VOTES -->
+  <section class="panel" id="tab-votes" hidden>
+    <div class="row">
+      <label for="threshold" class="small">Majorité requise</label>
+      <select id="threshold" class="ghost">
+        <option value="4">4 voix sur 8</option><option value="5" selected>5 voix sur 8</option><option value="6">6 voix sur 8</option>
+      </select>
+      <span class="small">Les ONG votent dans la simulation, même si elles ne sont qu'observatrices à l'ONU.</span>
+    </div>
+    <div class="articles" id="articles"></div>
+    <div class="decl" id="decl"></div>
+  </section>
+</div>
+<div id="proj" hidden>
+  <header class="pj-top"><h1>Conférence de l'océan</h1><span class="eyebrow" id="pjStep">Temps 1 sur 5</span></header>
+  <div class="pj-main" id="pjMain">
+    <div class="pj-phase" id="pjPhase">Préparer</div>
+    <div class="pj-clock" id="pjClock">20:00</div>
+    <div class="pj-bar"><i id="pjBar"></i></div>
+    <div class="pj-note" id="pjNote"></div>
+    <div class="pj-side" id="pjSide"></div>
+  </div>
+  <div class="pj-steps" id="pjSteps"></div>
+  <button class="ghost pj-fs" id="pjFs">Plein écran</button>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const DELEG = [
+  { id: "chine", nom: "Chine", c: "#C0392B" },
+  { id: "usa", nom: "États-Unis", c: "#1F4E79" },
+  { id: "ue", nom: "Union européenne", c: "#2E75B6" },
+  { id: "arctique", nom: "États de l'Arctique", c: "#5D6D7E" },
+  { id: "pacifique", nom: "Petits États insulaires du Pacifique", c: "#177A87" },
+  { id: "afrique", nom: "Afrique de l'Ouest", c: "#B9770E" },
+  { id: "industriels", nom: "Industriels de la mer", c: "#7F6000" },
+  { id: "ong", nom: "ONG et scientifiques", c: "#548235" }
+];
+const D = Object.fromEntries(DELEG.map(d => [d.id, d]));
+const PHASES = [
+  { nom: "Préparer", min: 20, sub: "Lisez votre carte d'acteur et remplissez la fiche de position : 3 propositions, 1 ligne rouge, 1 concession." },
+  { nom: "Ouvrir la séance", min: 20, sub: "Chaque porte-parole présente sa position en 1 min 30. Utilisez l'onglet Tours de parole." },
+  { nom: "Négocier", min: 25, sub: "Les négociateurs circulent, forment des alliances et rédigent des amendements. Attention aux événements !" },
+  { nom: "Voter", min: 15, sub: "Chaque article est adopté s'il obtient la majorité requise. Sinon, 5 minutes de négociation puis nouveau vote." },
+  { nom: "Comparer", min: 15, sub: "Comparez la déclaration à la réalité et complétez la partie II.C du cours." }
+];
+const ARTICLES = [
+  { t: "Article 1 — Les grands fonds", q: "Autoriser, encadrer ou interdire pour un temps l'exploitation minière ? Qui délivre les permis ?" },
+  { t: "Article 2 — Protéger la haute mer", q: "Quelle part des océans protéger, où et avec quelles règles, y compris dans l'Arctique ?" },
+  { t: "Article 3 — Contrôler et payer", q: "Qui surveille, qui paie, quelles sanctions, comment partager les bénéfices ?" }
+];
+const EVENTS = [
+  { t: "De l'« oxygène noir » au fond de l'océan", tag: "real", src: "Inspiré de faits réels · 2024",
+    txt: "Des chercheurs annoncent que les nodules polymétalliques de la zone de Clarion-Clipperton produiraient de l'oxygène à 4 000 mètres de profondeur, dans l'obscurité totale. Les détruire pourrait perturber un écosystème encore inconnu.",
+    con: "Les ONG et scientifiques obtiennent 1 minute de parole immédiate. Les industriels doivent leur répondre.", who: ["ong", "industriels"] },
+  { t: "Un câble sous-marin coupé en mer Baltique", tag: "real", src: "Inspiré de faits réels · 2024",
+    txt: "Un navire a traîné son ancre sur plusieurs kilomètres et sectionné un câble Internet entre deux pays européens. Un sabotage est soupçonné.",
+    con: "L'Union européenne et les États de l'Arctique peuvent ajouter à l'article 3 une clause de protection des câbles.", who: ["ue", "arctique"] },
+  { t: "Le détroit d'Ormuz bloqué", tag: "real", src: "Inspiré de faits réels · 2026",
+    txt: "Le trafic des pétroliers est paralysé à la sortie du golfe Arabo-Persique. Le prix du pétrole s'envole et les armateurs détournent leurs navires.",
+    con: "Les industriels de la mer et la Chine exigent une garantie de liberté de circulation. Toutes les délégations ont 2 minutes pour se positionner.", who: ["industriels", "chine"] },
+  { t: "Un porte-conteneurs traverse l'Arctique", tag: "real", src: "Inspiré de faits réels · 2025",
+    txt: "Un porte-conteneurs chinois relie la Chine à l'Europe par la route du Nord, le long de la Sibérie, en une vingtaine de jours au lieu de quarante par Suez.",
+    con: "La Chine et les États de l'Arctique doivent négocier ensemble 3 minutes : qui contrôle cette route ?", who: ["chine", "arctique"] },
+  { t: "Une marque automobile renonce aux métaux des grands fonds", tag: "real", src: "Inspiré de faits réels",
+    txt: "Un grand constructeur annonce qu'il n'achètera jamais de nickel ou de cobalt extraits des fonds marins, tant que leurs effets ne sont pas connus.",
+    con: "Les industriels de la mer doivent revoir l'une de leurs propositions.", who: ["industriels"] },
+  { t: "Un chalutier arraisonné au large du Sénégal", tag: "fic", src: "Scénario de simulation",
+    txt: "La marine sénégalaise arraisonne un chalutier-usine étranger qui pêchait sans licence dans sa ZEE. Ses cales contiennent 300 tonnes de sardinelles.",
+    con: "L'Afrique de l'Ouest peut exiger un vote séparé sur les sanctions contre la pêche illégale.", who: ["afrique"] },
+  { t: "Un cyclone dévaste un atoll du Pacifique", tag: "fic", src: "Scénario de simulation",
+    txt: "Un cyclone d'une violence record, renforcé par le réchauffement de l'océan, submerge un atoll habité. Des milliers de personnes doivent être évacuées.",
+    con: "Les petits États insulaires obtiennent 1 minute de parole et peuvent demander la création d'un fonds d'aide.", who: ["pacifique"] },
+  { t: "Le prix du cobalt s'envole", tag: "fic", src: "Scénario de simulation",
+    txt: "Une pénurie menace les usines de batteries : le prix du cobalt double en une semaine. Les constructeurs de voitures électriques s'inquiètent.",
+    con: "La Chine, les États-Unis et les industriels se renforcent : ils peuvent proposer un amendement à l'article 1.", who: ["chine", "usa", "industriels"] },
+  { t: "Marée noire au large de la Norvège", tag: "fic", src: "Scénario de simulation",
+    txt: "Un pétrolier s'échoue près des côtes arctiques norvégiennes. Le froid ralentit la dégradation du pétrole : la pollution durera des années.",
+    con: "Les États de l'Arctique doivent dire s'ils acceptent une aire marine protégée dans l'Arctique. L'UE et les ONG peuvent les interpeller.", who: ["arctique", "ue", "ong"] },
+  { t: "Les États-Unis délivrent un premier permis", tag: "fic", src: "Scénario de simulation",
+    txt: "Washington accorde un permis d'exploitation des grands fonds selon sa propre loi, sans attendre l'Autorité internationale des fonds marins.",
+    con: "Coup de théâtre : chaque délégation réagit en 30 secondes. Le vote de l'article 1 est repoussé de 5 minutes.", who: ["usa"] },
+  { t: "Alliance imposée", tag: "rule", src: "Règle du jeu",
+    txt: "La présidence tire au sort deux délégations qui ne se sont pas encore parlé.",
+    con: "Ces deux délégations doivent négocier ensemble pendant 3 minutes et proposer un amendement commun.", who: "random2" },
+  { t: "Fuite dans la presse", tag: "rule", src: "Règle du jeu",
+    txt: "Un journaliste révèle la ligne rouge d'une délégation tirée au sort.",
+    con: "Cette délégation doit lire à voix haute sa ligne rouge. Les autres peuvent en tenir compte.", who: "random1" }
+];
+
+// ---------- état ----------
+const KEY = "conf-ocean-v1";
+const fresh = () => ({
+  durs: PHASES.map(p => p.min * 60), phase: 0, left: PHASES[0].min * 60, running: false, endAt: 0,
+  order: [], spk: -1, spoken: [], spkLeft: 90, spkLen: 90, spkRun: false, spkEnd: 0, sel: null, reply: false,
+  used: [], cur: null, curWho: [], projEvent: false,
+  votes: ARTICLES.map(() => ({})), texts: ARTICLES.map(() => ""), tours: ARTICLES.map(() => 1), threshold: 5, sound: false
+});
+let S;
+try { S = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { S = fresh(); }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const $ = (id) => document.getElementById(id);
+const fmt = (s) => { const neg = s < 0; s = Math.abs(Math.round(s)); return (neg ? "+" : "") + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+const toast = (m) => { const t = $("toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2200); };
+
+// ---------- son ----------
+let ctx = null;
+function beep(n = 3) {
+  if (!S.sound) return;
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    for (let i = 0; i < n; i++) {
+      const o = ctx.createOscillator(), g = ctx.createGain(), t0 = ctx.currentTime + i * 0.35;
+      o.frequency.value = 880; o.type = "sine"; g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25);
+      o.connect(g).connect(ctx.destination); o.start(t0); o.stop(t0 + 0.3);
+    }
+  } catch (e) {}
+}
+$("soundBtn").onclick = () => { S.sound = !S.sound; if (S.sound) { beep(1); } renderBar(); save(); };
+$("fsBtn").onclick = () => { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => toast("Plein écran indisponible ici")); } catch (e) { toast("Plein écran indisponible ici"); } };
+
+// ---------- onglets ----------
+const TABS = ["seance", "parole", "evenements", "votes"];
+function showTab() {
+  const t = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "seance";
+  TABS.forEach(x => { $("tab-" + x).hidden = x !== t; });
+  document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.tab === t ? "page" : "false"));
+  return t;
+}
+addEventListener("hashchange", showTab);
+
+// ---------- séance ----------
+const stateOf = (left, total) => left <= 0 ? "over" : (left <= Math.min(60, total * 0.2) ? "warn" : "ok");
+function renderSteps() {
+  $("steps").innerHTML = PHASES.map((p, i) => `
+    <div class="step" data-on="${i === S.phase}" data-done="${i < S.phase}">
+      <span class="n">Temps ${i + 1}</span><b>${p.nom}</b>
+      <span class="dur"><button data-d="${i}" data-x="-1" aria-label="Retirer une minute à ${p.nom}">−</button>
+      <span>${Math.round(S.durs[i] / 60)} min</span>
+      <button data-d="${i}" data-x="1" aria-label="Ajouter une minute à ${p.nom}">+</button></span>
+    </div>`).join("");
+}
+$("steps").onclick = (e) => {
+  const b = e.target.closest("button[data-d]"); if (!b) return;
+  const i = +b.dataset.d, x = +b.dataset.x;
+  S.durs[i] = Math.max(60, S.durs[i] + x * 60);
+  if (i === S.phase && !S.running) S.left = S.durs[i];
+  renderSteps(); renderMain(); save();
+};
+function curLeft() { return S.running ? (S.endAt - Date.now()) / 1000 : S.left; }
+function renderMain() {
+  const left = curLeft(), total = S.durs[S.phase], st = stateOf(left, total), p = PHASES[S.phase];
+  $("mainDisplay").dataset.state = st;
+  $("mainStep").textContent = `Temps ${S.phase + 1} sur 5`;
+  $("mainWhat").textContent = p.nom;
+  $("mainClock").textContent = left <= 0 ? "Temps écoulé" : fmt(left);
+  $("mainClock").style.fontSize = left <= 0 ? "clamp(48px, 9vw, 110px)" : "";
+  $("mainSub").textContent = p.sub;
+  $("mainBar").style.width = Math.min(100, Math.max(0, 100 * (1 - left / total))) + "%";
+  $("startBtn").textContent = S.running ? "Pause" : (S.left < S.durs[S.phase] ? "Reprendre" : "Démarrer");
+  $("prevBtn").disabled = S.phase === 0; $("nextBtn").disabled = S.phase === PHASES.length - 1;
+  renderBar(left, total);
+}
+function renderBar(left = curLeft(), total = S.durs[S.phase]) {
+  $("phaseLine").textContent = `Temps ${S.phase + 1} — ${PHASES[S.phase].nom}`;
+  $("miniClock").textContent = left <= 0 ? "0:00" : fmt(left);
+  $("miniClock").dataset.state = stateOf(left, total);
+  $("soundBtn").setAttribute("aria-pressed", S.sound); $("soundBtn").textContent = S.sound ? "Son activé" : "Son coupé";
+}
+function toggleMain() {
+  if (S.running) { S.left = curLeft(); S.running = false; }
+  else { if (S.left <= 0) S.left = S.durs[S.phase]; S.endAt = Date.now() + S.left * 1000; S.running = true; S.alerted = false; }
+  renderMain(); save();
+}
+$("startBtn").onclick = toggleMain;
+$("plusBtn").onclick = () => { if (S.running) S.endAt += 60000; else S.left += 60; S.durs[S.phase] += 60; renderSteps(); renderMain(); save(); };
+$("resetBtn").onclick = () => { S.running = false; S.left = S.durs[S.phase]; renderMain(); save(); };
+const goPhase = (i) => { S.phase = i; S.running = false; S.left = S.durs[i]; renderSteps(); renderMain(); save(); };
+$("nextBtn").onclick = () => S.phase < PHASES.length - 1 && goPhase(S.phase + 1);
+$("prevBtn").onclick = () => S.phase > 0 && goPhase(S.phase - 1);
+
+// ---------- parole ----------
+function spkLeft() { return S.spkRun ? (S.spkEnd - Date.now()) / 1000 : S.spkLeft; }
+function renderSpk() {
+  const list = S.order.length ? S.order : DELEG.map(d => d.id);
+  $("spkList").innerHTML = list.map((id, i) => {
+    const d = D[id], st = (id === S.order[S.spk] && !S.reply) || (S.reply && id === S.sel) ? "now" : (S.spoken.includes(id) ? "done" : "wait");
+    const lab = st === "now" ? "à la tribune" : st === "done" ? "a parlé" : (S.order.length ? "à venir" : "");
+    return `<button class="plate" style="--c:${d.c}" data-id="${id}" data-st="${st}" aria-pressed="${S.sel === id}">
+      <span class="ord">${S.order.length ? i + 1 : ""}</span><span class="nm" style="flex:1">${d.nom}</span><span class="st">${S.sel === id && st !== "now" ? "sélectionnée" : lab}</span></button>`;
+  }).join("");
+  const id = S.reply ? S.sel : S.order[S.spk], d = id && D[id];
+  const left = spkLeft(), total = S.reply ? 30 : S.spkLen, st = stateOf(left, total);
+  $("spkDisplay").dataset.state = id ? st : "ok";
+  $("spkDisplay").style.setProperty("--c", d ? d.c : "");
+  $("spkName").style.setProperty("--c", d ? d.c : "");
+  $("spkEyebrow").textContent = S.reply ? "Droit de réponse" : (id ? `Porte-parole · ${S.spk + 1} sur ${S.order.length}` : "Porte-parole");
+  $("spkName").textContent = d ? d.nom : (S.order.length ? "Ordre tiré : cliquez sur Suivant" : "Tirez l'ordre au sort");
+  $("spkClock").textContent = left <= 0 ? "Temps écoulé" : fmt(left);
+  $("spkClock").style.fontSize = left <= 0 ? "clamp(40px, 7vw, 90px)" : "";
+  $("spkBar").style.width = id ? Math.min(100, Math.max(0, 100 * (1 - left / total))) + "%" : "0%";
+  $("spkStartBtn").textContent = S.spkRun ? "Pause" : "Démarrer";
+  $("spkStartBtn").disabled = !id;
+  $("spkNextBtn").textContent = S.reply ? "Fin du droit de réponse" : (S.spk < 0 ? "Premier orateur" : "Suivant");
+  $("spkNextBtn").disabled = !S.order.length || (!S.reply && S.spk >= S.order.length - 1 && S.spoken.length >= S.order.length);
+  $("spkLen").value = String(S.spkLen);
+}
+$("shuffleBtn").onclick = () => {
+  const a = DELEG.map(d => d.id);
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  Object.assign(S, { order: a, spk: -1, spoken: [], spkRun: false, spkLeft: S.spkLen, reply: false });
+  renderSpk(); save(); toast("Ordre de passage tiré au sort");
+};
+function toggleSpk() {
+  if (S.spkRun) { S.spkLeft = spkLeft(); S.spkRun = false; }
+  else { if (S.spkLeft <= 0) S.spkLeft = S.reply ? 30 : S.spkLen; S.spkEnd = Date.now() + S.spkLeft * 1000; S.spkRun = true; S.spkAlerted = false; }
+  renderSpk(); save();
+}
+$("spkStartBtn").onclick = toggleSpk;
+$("spkNextBtn").onclick = () => {
+  if (S.reply) { Object.assign(S, { reply: false, spkRun: false, spkLeft: S.spkLen }); renderSpk(); save(); return; }
+  const cur = S.order[S.spk]; if (cur && !S.spoken.includes(cur)) S.spoken.push(cur);
+  if (S.spk < S.order.length - 1) { S.spk++; S.spkLeft = S.spkLen; S.spkRun = false; }
+  renderSpk(); save();
+};
+$("spkLen").onchange = (e) => { S.spkLen = +e.target.value; if (!S.spkRun && !S.reply) S.spkLeft = S.spkLen; renderSpk(); save(); };
+$("spkList").onclick = (e) => { const b = e.target.closest(".plate"); if (!b) return; S.sel = S.sel === b.dataset.id ? null : b.dataset.id; renderSpk(); save(); };
+$("replyBtn").onclick = () => {
+  if (!S.sel) { toast("Sélectionnez d'abord une délégation dans la liste"); return; }
+  Object.assign(S, { reply: true, spkRun: false, spkLeft: 30 }); renderSpk(); save();
+};
+
+// ---------- événements ----------
+function pickRandom(n) { const a = DELEG.map(d => d.id).sort(() => Math.random() - .5); return a.slice(0, n); }
+function trigger(i) {
+  const ev = EVENTS[i];
+  S.cur = i; if (!S.used.includes(i)) S.used.push(i);
+  S.curWho = ev.who === "random2" ? pickRandom(2) : ev.who === "random1" ? pickRandom(1) : ev.who;
+  renderEvents(); save(); beep(2);
+}
+$("drawBtn").onclick = () => {
+  const left = EVENTS.map((_, i) => i).filter(i => !S.used.includes(i));
+  if (!left.length) { toast("Le paquet est vide : cliquez sur une carte pour la rejouer"); return; }
+  trigger(left[Math.floor(Math.random() * left.length)]);
+};
+$("deck").onclick = (e) => { const b = e.target.closest("button[data-ev]"); if (b) trigger(+b.dataset.ev); };
+function renderEvents() {
+  $("deck").innerHTML = EVENTS.map((ev, i) => `<button data-ev="${i}" data-used="${S.used.includes(i)}">${ev.t}</button>`).join("");
+  const n = EVENTS.length - S.used.length;
+  $("deckCount").textContent = `${n} carte${n > 1 ? "s" : ""} encore dans le paquet sur ${EVENTS.length}`;
+  if (S.cur === null) {
+    $("eventView").innerHTML = `<div class="event" style="border-style:dashed;border-color:var(--line)"><div class="eyebrow">Aucun événement en cours</div>
+      <p>Pendant la négociation, tirez un événement pour relancer les échanges. Les cartes « Inspiré de faits réels » s'appuient sur l'actualité, les cartes « Scénario de simulation » sont inventées pour le jeu.</p></div>`;
+    return;
+  }
+  const ev = EVENTS[S.cur], cls = ev.tag === "real" ? "real" : ev.tag === "fic" ? "fic" : "";
+  $("eventView").innerHTML = `<article class="event">
+    <div class="row"><span class="tag ${cls}">${ev.src}</span><span class="eyebrow">Événement</span></div>
+    <h2>${ev.t}</h2><p>${ev.txt}</p>
+    <div class="consigne">${ev.con}</div>
+    <div class="chips">${S.curWho.map(id => `<span class="chip" style="--c:${D[id].c}">${D[id].nom}</span>`).join("")}</div>
+  </article>`;
+}
+
+// ---------- votes ----------
+function tally(k) {
+  const v = S.votes[k], r = { pour: 0, contre: 0, abst: 0, n: 0 };
+  DELEG.forEach(d => { if (v[d.id]) { r[v[d.id]]++; r.n++; } });
+  r.verdict = r.pour >= S.threshold ? "ok" : (r.n === DELEG.length || r.contre + r.abst > DELEG.length - S.threshold) ? "no" : "wait";
+  return r;
+}
+function renderVotes() {
+  $("threshold").value = String(S.threshold);
+  $("articles").innerHTML = ARTICLES.map((a, k) => {
+    const r = tally(k);
+    const vlab = r.verdict === "ok" ? "Adopté" : r.verdict === "no" ? "Rejeté" : "Vote en cours";
+    return `<div class="card">
+      <div class="art-head"><div><h3>${a.t}</h3><div class="small">${a.q}</div></div>
+        <span class="verdict" data-v="${r.verdict}">${vlab} · tour ${S.tours[k]}</span></div>
+      <label class="small" for="txt${k}">Texte soumis au vote (rédigé par les scribes)</label>
+      <textarea id="txt${k}" data-k="${k}" placeholder="Exemple : « L'exploitation minière des grands fonds est suspendue jusqu'en 2035, sauf avis favorable d'un comité scientifique international. »">${S.texts[k].replace(/</g, "&lt;")}</textarea>
+      <div class="vote-grid"><table><thead><tr><th>Délégation</th><th>Vote</th></tr></thead><tbody>
+      ${DELEG.map(d => `<tr><td><span class="chip" style="--c:${d.c}">${d.nom}</span></td><td><span class="vb">
+        ${["pour", "contre", "abst"].map(v => `<button data-k="${k}" data-d="${d.id}" data-v="${v}" aria-pressed="${S.votes[k][d.id] === v}">${v === "abst" ? "Abstention" : v === "pour" ? "Pour" : "Contre"}</button>`).join("")}
+      </span></td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="tally"><span>Pour <b>${r.pour}</b></span><span>Contre <b>${r.contre}</b></span><span>Abstention <b>${r.abst}</b></span><span class="small">${r.n} délégation${r.n > 1 ? "s" : ""} sur 8 · il faut ${S.threshold} voix pour</span></div>
+      <div class="row" style="margin-top:10px"><button class="btn alt" data-retour="${k}">Nouveau tour de vote</button></div>
+    </div>`;
+  }).join("");
+  renderDecl();
+}
+function renderDecl() {
+  $("decl").innerHTML = `<div class="eyebrow">Adoptée par la classe</div><h2>Déclaration de l'océan</h2>
+    <ol>${ARTICLES.map((a, k) => {
+      const r = tally(k), txt = S.texts[k].trim() || "(texte à rédiger)";
+      const st = r.verdict === "ok" ? "" : r.verdict === "no" ? " — rejeté" : " — en attente du vote";
+      return `<li data-v="${r.verdict}"><b>${a.t.split(" — ")[1]}.</b> ${txt.replace(/</g, "&lt;")}${st}</li>`;
+    }).join("")}</ol>`;
+}
+$("articles").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-v]");
+  if (b) { const k = +b.dataset.k; const was = tally(k).verdict; const cur = S.votes[k][b.dataset.d]; S.votes[k][b.dataset.d] = cur === b.dataset.v ? undefined : b.dataset.v; renderVotes(); save(); if (was !== "ok" && tally(k).verdict === "ok") { beep(1); toast(`Article ${k + 1} adopté`); } return; }
+  const r = e.target.closest("button[data-retour]");
+  if (r) { const k = +r.dataset.retour; S.votes[k] = {}; S.tours[k]++; renderVotes(); save(); toast(`Article ${k + 1} : tour ${S.tours[k]}`); }
+});
+$("articles").addEventListener("input", (e) => { if (e.target.matches("textarea[data-k]")) { S.texts[+e.target.dataset.k] = e.target.value; renderDecl(); save(); } });
+$("threshold").onchange = (e) => { S.threshold = +e.target.value; renderVotes(); save(); };
+$("resetAllBtn").onclick = () => { $("confirmBar").hidden = false; $("confirmNo").focus(); };
+$("confirmNo").onclick = () => { $("confirmBar").hidden = true; $("resetAllBtn").focus(); };
+$("confirmYes").onclick = () => {
+  const snd = S.sound; S = fresh(); S.sound = snd; save();
+  $("confirmBar").hidden = true; location.hash = "#seance"; renderAll(); toast("Séance réinitialisée");
+};
+
+// ---------- boucle ----------
+function tick() {
+  if (S.running) { const l = curLeft(); if (l <= 0 && !S.alerted) { S.alerted = true; beep(3); } renderMain(); }
+  if (S.spkRun) { const l = spkLeft(); if (l <= 0 && !S.spkAlerted) { S.spkAlerted = true; beep(2); } renderSpk(); }
+}
+setInterval(tick, 250);
+document.addEventListener("keydown", (e) => {
+  if (location.hash === "#projection") return;
+  if (e.key === "Escape" && !$("confirmBar").hidden) { $("confirmBar").hidden = true; return; }
+  if (e.target.matches("textarea, input, select")) return;
+  if (["1", "2", "3", "4"].includes(e.key)) { location.hash = "#" + TABS[+e.key - 1]; return; }
+  if (e.code === "Space") { const t = showTab(); if (t === "seance") { e.preventDefault(); toggleMain(); } else if (t === "parole" && (S.order[S.spk] || S.reply)) { e.preventDefault(); toggleSpk(); } }
+});
+
+// ---------- écran élèves ----------
+const PROJ_URL = location.href.split("#")[0] + "#projection";
+$("projLink").href = PROJ_URL; $("projUrl").textContent = PROJ_URL;
+$("projBtn").onclick = () => {
+  let w = null;
+  try { w = window.open(PROJ_URL, "conf-ocean-eleves", "popup,width=1280,height=720"); } catch (e) {}
+  $("projBox").hidden = false;
+  $("projMsg").textContent = w ? "La fenêtre élèves est ouverte : glissez-la sur l'écran du vidéoprojecteur, puis cliquez sur « Plein écran » en bas à droite. Si elle n'apparaît pas, utilisez le lien ci-dessous."
+    : "Ouvrez ce lien dans un nouvel onglet ou une nouvelle fenêtre, glissez-la sur l'écran du vidéoprojecteur, puis passez-la en plein écran. Elle suit cette console en direct, dans le même navigateur.";
+};
+$("projCopy").onclick = () => {
+  try { navigator.clipboard.writeText(PROJ_URL).then(() => toast("Lien copié"), () => selUrl()); } catch (e) { selUrl(); }
+};
+function selUrl() { const r = document.createRange(); r.selectNodeContents($("projUrl")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); toast("Lien sélectionné : copiez-le avec Ctrl+C"); }
+$("projEvBtn").onclick = () => { S.projEvent = !S.projEvent; renderProjEvBtn(); save(); };
+function renderProjEvBtn() { $("projEvBtn").setAttribute("aria-pressed", !!S.projEvent); $("projEvBtn").textContent = S.projEvent ? "Événement affiché aux élèves : cliquer pour le masquer" : "Afficher l'événement sur l'écran élèves"; }
+
+function startProjection() {
+  document.querySelector(".wrap").hidden = true; $("projBox").hidden = true; $("proj").hidden = false;
+  $("pjFs").onclick = () => { try { document.documentElement.requestFullscreen().catch(() => toast("Plein écran indisponible ici")); } catch (e) { toast("Plein écran indisponible ici"); } };
+  let last = 0;
+  const draw = () => {
+    let P; try { P = Object.assign(fresh(), JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { P = fresh(); }
+    const total = P.durs[P.phase], left = P.running ? (P.endAt - Date.now()) / 1000 : P.left;
+    const st = P.running ? stateOf(left, total) : (left <= 0 ? "over" : "paused");
+    $("pjMain").dataset.state = st;
+    $("pjStep").textContent = `Temps ${P.phase + 1} sur 5`;
+    $("pjPhase").textContent = PHASES[P.phase].nom;
+    $("pjClock").textContent = left <= 0 ? "Temps écoulé" : fmt(left);
+    $("pjClock").style.fontSize = left <= 0 ? "clamp(56px, 11vw, 180px)" : "";
+    $("pjBar").style.width = Math.min(100, Math.max(0, 100 * (1 - left / total))) + "%";
+    $("pjNote").textContent = !P.running && left > 0 && left < total ? "En pause" : (P.phase < 4 ? `Ensuite : ${PHASES[P.phase + 1].nom}` : "Dernier temps de la séance");
+    let side = "";
+    const sid = P.reply ? P.sel : P.order[P.spk];
+    if (sid && D[sid] && (P.phase === 1 || P.reply || P.spkRun)) {
+      const sl = P.spkRun ? (P.spkEnd - Date.now()) / 1000 : P.spkLeft;
+      const next = !P.reply && P.order[P.spk + 1] ? `Ensuite : ${D[P.order[P.spk + 1]].nom}` : "";
+      side += `<div class="pj-spk" style="--c:${D[sid].c}"><span class="lab">${P.reply ? "Droit de réponse" : "À la tribune"}</span><span class="who">${D[sid].nom}</span><span class="t">${sl <= 0 ? "0:00" : fmt(sl)}</span><span class="lab">${next}</span></div>`;
+    }
+    if (P.projEvent && P.cur !== null && EVENTS[P.cur]) {
+      const ev = EVENTS[P.cur];
+      side += `<div class="pj-ev"><b>${ev.t}</b><span>${ev.con}</span></div>`;
+    }
+    if ($("pjSide").innerHTML !== side) $("pjSide").innerHTML = side;
+    $("proj").dataset.busy = side ? "true" : "false";
+    const steps = PHASES.map((p, i) => `<div class="pj-step" data-s="${i < P.phase ? "done" : i === P.phase ? "now" : "next"}">Temps ${i + 1}<b>${p.nom}</b>${Math.round(P.durs[i] / 60)} min</div>`).join("");
+    if ($("pjSteps").innerHTML !== steps) $("pjSteps").innerHTML = steps;
+    if (left <= 0 && P.running && P.endAt !== last) { last = P.endAt; beep(3); }
+  };
+  draw(); setInterval(draw, 250);
+  addEventListener("storage", draw);
+  try { navigator.wakeLock && navigator.wakeLock.request("screen").catch(() => {}); } catch (e) {}
+}
+function renderAll() { showTab(); renderSteps(); renderMain(); renderSpk(); renderEvents(); renderVotes(); renderProjEvBtn(); }
+if (location.hash === "#projection") startProjection(); else renderAll();
+</script>
+
+</body>
+</html>
